@@ -83,6 +83,22 @@ class MockGarminConnect:
         self.config = config or MockGarminConfig()
         self.authenticated = False
         self.auth_token = None
+        self._failure_mode = False
+
+    def set_failure_mode(self, enabled: bool) -> None:
+        """
+        Enable or disable failure mode for testing error handling.
+
+        Args:
+            enabled: If True, all API calls will raise exceptions
+        """
+        self._failure_mode = enabled
+        if enabled:
+            self.config.fail_on_network = True
+        else:
+            self.config.fail_on_network = False
+            self.config.fail_on_rate_limit = False
+            self.config.fail_on_auth = False
 
     def authenticate(self, email: str, password: str) -> Dict[str, str]:
         """
@@ -344,14 +360,18 @@ class MockGarminConnect:
             hour=random.randint(5, 18), minute=random.randint(0, 59)
         )
 
+        activity_id = random.randint(10000000, 99999999)
+
         return {
-            "id": random.randint(10000000, 99999999),
+            "garmin_activity_id": str(activity_id),
+            "activity_date": date_obj,
+            "start_time": start_time,
             "activity_name": f"Mock {activity_type.title()}",
-            "start_time_in_seconds": int(start_time.timestamp()),
             "activity_type": activity_type,
             "duration_seconds": duration_seconds,
+            "duration_minutes": duration_seconds / 60,
             "distance_meters": random.uniform(1000, 20000),
-            "average_heart_rate": random.randint(120, 160),
+            "avg_heart_rate": random.randint(120, 160),
             "max_heart_rate": random.randint(160, 180),
             "calories": int(duration_seconds / 10),
             "training_effect_aerobic": random.uniform(1.0, 4.0),

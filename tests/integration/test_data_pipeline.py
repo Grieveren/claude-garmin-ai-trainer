@@ -26,6 +26,14 @@ class TestDataPipelineIntegration:
         user_id = "integration_test_user"
         test_date = date.today()
 
+        # Create user first to satisfy foreign key constraint
+        user_data = {
+            "user_id": user_id,
+            "email": f"{user_id}@example.com",
+            "name": "Integration Test User"
+        }
+        dal.create_user(db_session, user_data)
+
         # Step 1: Fetch data from Garmin
         daily_metrics = mock_garmin_service.get_daily_metrics(user_id, test_date)
         sleep_data = mock_garmin_service.get_sleep_data(user_id, test_date)
@@ -78,6 +86,14 @@ class TestDataPipelineIntegration:
         end_date = date.today()
         start_date = end_date - timedelta(days=30)
 
+        # Create user first to satisfy foreign key constraint
+        user_data = {
+            "user_id": user_id,
+            "email": f"{user_id}@example.com",
+            "name": "30 Day Test User"
+        }
+        dal.create_user(db_session, user_data)
+
         # Fetch and store 30 days of data
         for i in range(30):
             current_date = start_date + timedelta(days=i)
@@ -120,6 +136,14 @@ class TestDataPipelineIntegration:
         end_date = date.today()
         start_date = end_date - timedelta(days=10)
 
+        # Create user first to satisfy foreign key constraint
+        user_data = {
+            "user_id": user_id,
+            "email": f"{user_id}@example.com",
+            "name": "Missing Data Test User"
+        }
+        dal.create_user(db_session, user_data)
+
         # Store data with some days missing
         for i in range(10):
             current_date = start_date + timedelta(days=i)
@@ -155,6 +179,14 @@ class TestPipelineErrorRecovery:
         """Test recovery from Garmin API failures."""
         user_id = "integration_error_user"
 
+        # Create user first to satisfy foreign key constraint
+        user_data = {
+            "user_id": user_id,
+            "email": f"{user_id}@example.com",
+            "name": "Error Test User"
+        }
+        dal.create_user(db_session, user_data)
+
         # Simulate API failure
         mock_garmin_service.set_failure_mode(True)
 
@@ -174,6 +206,14 @@ class TestPipelineErrorRecovery:
         user_id = "integration_constraint_user"
         test_date = date.today()
 
+        # Create user first to satisfy foreign key constraint
+        user_data = {
+            "user_id": user_id,
+            "email": f"{user_id}@example.com",
+            "name": "Constraint Test User"
+        }
+        dal.create_user(db_session, user_data)
+
         # Create first record
         metrics_data = {
             "user_id": user_id,
@@ -181,6 +221,7 @@ class TestPipelineErrorRecovery:
             "steps": 10000
         }
         dal.create_daily_metrics(db_session, metrics_data)
+        db_session.commit()  # Commit so rollback doesn't undo this
 
         # Try to create duplicate
         from sqlalchemy.exc import IntegrityError
@@ -208,6 +249,14 @@ class TestPipelineErrorRecovery:
         user_id = "integration_partial_sync_user"
         end_date = date.today()
         start_date = end_date - timedelta(days=5)
+
+        # Create user first to satisfy foreign key constraint
+        user_data = {
+            "user_id": user_id,
+            "email": f"{user_id}@example.com",
+            "name": "Partial Sync Test User"
+        }
+        dal.create_user(db_session, user_data)
 
         synced_dates = []
         failed_dates = []
@@ -351,6 +400,14 @@ class TestDataIntegrity:
         user_id = "integrity_test_user"
         test_date = date.today()
 
+        # Create user first to satisfy foreign key constraint
+        user_data = {
+            "user_id": user_id,
+            "email": f"{user_id}@example.com",
+            "name": "Integrity Test User"
+        }
+        dal.create_user(db_session, user_data)
+
         # Fetch from Garmin
         garmin_data = mock_garmin_service.get_daily_metrics(user_id, test_date)
 
@@ -376,6 +433,14 @@ class TestDataIntegrity:
         """Test database relationships are maintained correctly."""
         user_id = "relationships_test_user"
         test_date = date.today()
+
+        # Create user first to satisfy foreign key constraint
+        user_data = {
+            "user_id": user_id,
+            "email": f"{user_id}@example.com",
+            "name": "Relationships Test User"
+        }
+        dal.create_user(db_session, user_data)
 
         # Create daily metrics
         daily_metrics = mock_garmin_service.get_daily_metrics(user_id, test_date)

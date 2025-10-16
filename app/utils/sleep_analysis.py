@@ -162,8 +162,9 @@ def calculate_sleep_quality_score(
     weights_used += 0.3
 
     # Normalize if not all components available
+    # Note: total_score is already weighted (components * weights), so we just normalize
     if weights_used > 0:
-        final_score = total_score / weights_used * 100
+        final_score = total_score / weights_used
     else:
         final_score = 0.0
 

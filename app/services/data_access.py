@@ -153,6 +153,26 @@ def upsert_daily_metrics(db: Session, metrics_data: Dict[str, Any]) -> DailyMetr
         return create_daily_metrics(db, metrics_data)
 
 
+def update_daily_metrics(
+    db: Session,
+    user_id: str,
+    metric_date: date,
+    updates: Dict[str, Any]
+) -> Optional[DailyMetrics]:
+    """Update daily metrics for a specific date."""
+    metrics = get_daily_metrics(db, user_id, metric_date)
+    if not metrics:
+        return None
+
+    for key, value in updates.items():
+        if hasattr(metrics, key) and key not in ["id", "created_at", "user_id", "date"]:
+            setattr(metrics, key, value)
+
+    metrics.updated_at = datetime.utcnow()
+    db.flush()
+    return metrics
+
+
 def bulk_insert_daily_metrics(
     db: Session,
     metrics_list: List[Dict[str, Any]],

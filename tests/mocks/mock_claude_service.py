@@ -275,9 +275,14 @@ class MockClaudeService:
 
     def _calculate_mock_readiness_score(self, context: ReadinessContext) -> float:
         """Calculate mock readiness score based on context."""
-        score = 70.0  # Base score
+        # Start with base score - use 60 if we have recent activities (suggests active training)
+        # Use 70 if no activity data (suggests recovery/rest period)
+        if context.recent_activities and len(context.recent_activities) > 0:
+            score = 60.0  # Lower base for active athletes
+        else:
+            score = 70.0  # Normal base for those with less data
 
-        # HRV contribution
+        # HRV contribution (strongest signal)
         if context.hrv_percent_of_baseline is not None:
             if context.hrv_percent_of_baseline >= 95:
                 score += 15
@@ -285,8 +290,17 @@ class MockClaudeService:
                 score += 10
             elif context.hrv_percent_of_baseline >= 75:
                 score += 5
+            elif context.hrv_percent_of_baseline < 80:
+                # Very low HRV is a major red flag
+                score -= 20
             else:
                 score -= 10
+        # If no HRV baseline but we have current HRV, use absolute value
+        elif context.hrv_current is not None:
+            if context.hrv_current < 45:  # Very low absolute HRV
+                score -= 25
+            elif context.hrv_current < 55:  # Low absolute HRV
+                score -= 15
 
         # Sleep contribution
         if context.sleep_last_night is not None:
@@ -296,19 +310,58 @@ class MockClaudeService:
                 score += 5
             elif context.sleep_last_night < 360:  # < 6 hours
                 score -= 15
+            elif context.sleep_last_night < 400:  # 6-7 hours
+                score -= 8
 
         # Training load contribution
         if context.acwr is not None:
             if 0.8 <= context.acwr <= 1.3:
                 score += 5
             elif context.acwr > 1.5:
-                score -= 15
+                score -= 20  # Increased penalty for high ACWR
             elif context.acwr < 0.7:
                 score -= 5
 
         # Consecutive hard days
         if context.consecutive_hard_days and context.consecutive_hard_days > 3:
             score -= context.consecutive_hard_days * 3
+
+        # Days since last rest (high value means need rest soon)
+        if context.days_since_last_rest is not None:
+            if context.days_since_last_rest >= 7:
+                score -= 15  # 7+ days without rest
+            elif context.days_since_last_rest >= 5:
+                score -= 8  # 5-6 days without rest
+
+        # Check recent activities for high volume
+        if context.recent_activities:
+            # Count days with significant training (>60 min or >10km)
+            hard_days = 0
+            for activity in context.recent_activities:
+                duration = activity.get('duration_minutes', 0) or 0
+                # distance can be in meters or km depending on source
+                distance = activity.get('distance', 0) or activity.get('distance_meters', 0) or 0
+
+                # Convert distance to meters if it's in km (< 1000 means it's in km)
+                if distance > 0 and distance < 1000:
+                    distance = distance * 1000
+
+                if duration >= 60 or distance >= 10000:
+                    hard_days += 1
+
+            # If 4+ hard days in recent activities, penalize
+            if hard_days >= 4:
+                score -= (hard_days - 3) * 5  # -5 points per day over 3
+
+            # Extra penalty for 7 consecutive hard days (no rest)
+            if hard_days >= 7:
+                score -= 10  # Additional penalty for no rest
+
+        # Resting heart rate (if elevated significantly)
+        if context.resting_heart_rate and context.rhr_baseline_7d:
+            hr_diff = context.resting_heart_rate - context.rhr_baseline_7d
+            if hr_diff > 5:
+                score -= hr_diff * 2  # -2 points per bpm over baseline
 
         return max(0.0, min(100.0, score))
 
@@ -413,17 +466,31 @@ class MockClaudeService:
         """Generate areas of concern."""
         concerns = []
 
+        # Check HRV - both baseline percent and absolute value
         if context.hrv_percent_of_baseline and context.hrv_percent_of_baseline < 80:
             concerns.append("HRV significantly below baseline")
+        elif context.hrv_current and context.hrv_current < 50:
+            concerns.append("Very low HRV indicating poor recovery")
 
+        # Check sleep
         if context.sleep_last_night and context.sleep_last_night < 360:
             concerns.append("Insufficient sleep for recovery")
+        elif context.sleep_last_night and context.sleep_last_night < 400:
+            concerns.append("Sub-optimal sleep duration")
 
+        # Check training load
         if context.acwr and context.acwr > 1.5:
             concerns.append("High training load relative to fitness")
 
+        # Check consecutive hard days
         if context.consecutive_hard_days and context.consecutive_hard_days > 3:
             concerns.append("Extended period without adequate recovery")
+
+        # Check resting heart rate elevation
+        if context.resting_heart_rate and context.rhr_baseline_7d:
+            hr_diff = context.resting_heart_rate - context.rhr_baseline_7d
+            if hr_diff > 5:
+                concerns.append(f"Elevated resting heart rate (+{hr_diff:.0f} bpm)")
 
         return concerns
 

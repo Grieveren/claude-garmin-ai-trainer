@@ -399,15 +399,17 @@ class DataProcessor:
         Returns:
             ReadinessRecommendation enum value
         """
-        # Priority concerns
-        if load_status.get('fitness_fatigue', {}).get('form_status') == 'overtrained':
+        # Priority concerns (with None checks)
+        if load_status and load_status.get('fitness_fatigue', {}).get('form_status') == 'overtrained':
             return ReadinessRecommendation.RECOVERY
 
-        if sleep_status.get('sleep_debt', {}).get('severity') == 'severe':
+        if sleep_status and sleep_status.get('sleep_debt', {}).get('severity') == 'severe':
             return ReadinessRecommendation.REST
 
-        if hrv_status.get('drop_vs_7d', {}).get('severity') == 'severe':
-            return ReadinessRecommendation.REST
+        if hrv_status:
+            drop_vs_7d = hrv_status.get('drop_vs_7d') if hrv_status else None
+            if drop_vs_7d and drop_vs_7d.get('severity') == 'severe':
+                return ReadinessRecommendation.REST
 
         # Score-based recommendations
         if readiness_score >= 85:
@@ -509,20 +511,24 @@ class DataProcessor:
 
         # Key factors
         readiness.key_factors = {
-            'hrv_status': hrv_status.get('status'),
+            'hrv_status': hrv_status.get('status') if hrv_status else None,
             'hrv_score': hrv_analysis.get_hrv_score(hrv_status),
-            'sleep_status': sleep_status.get('status'),
+            'sleep_status': sleep_status.get('status') if sleep_status else None,
             'sleep_score': sleep_analysis.get_sleep_score(sleep_status),
-            'load_status': load_status.get('overall_status')
+            'load_status': load_status.get('overall_status') if load_status else None
         }
 
         # Red flags
         red_flags = []
-        if hrv_status.get('drop_vs_7d', {}).get('severity') in ['moderate', 'severe']:
-            red_flags.append(f"HRV drop: {hrv_status['drop_vs_7d']['severity']}")
-        if sleep_status.get('sleep_debt', {}).get('severity') in ['moderate', 'severe']:
-            red_flags.append(f"Sleep debt: {sleep_status['sleep_debt']['severity']}")
-        if load_status.get('overall_status') in ['caution', 'warning']:
+        if hrv_status:
+            drop_vs_7d = hrv_status.get('drop_vs_7d')
+            if drop_vs_7d and drop_vs_7d.get('severity') in ['moderate', 'severe']:
+                red_flags.append(f"HRV drop: {drop_vs_7d['severity']}")
+        if sleep_status:
+            sleep_debt = sleep_status.get('sleep_debt')
+            if sleep_debt and sleep_debt.get('severity') in ['moderate', 'severe']:
+                red_flags.append(f"Sleep debt: {sleep_debt['severity']}")
+        if load_status and load_status.get('overall_status') in ['caution', 'warning']:
             red_flags.append(f"Training load: {load_status['overall_status']}")
 
         readiness.red_flags = {'flags': red_flags} if red_flags else None
