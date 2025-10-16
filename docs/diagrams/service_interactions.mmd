@@ -1,0 +1,124 @@
+%% Service Interaction Patterns Diagram
+%% Shows how services interact with each other and handle cross-cutting concerns
+
+graph TB
+    %% ========================================
+    %% Service Layer
+    %% ========================================
+    subgraph ServiceLayer["Service Layer - Business Logic"]
+        GarminSvc[Garmin Service]
+        AISvc[AI Analyzer]
+        DataProc[Data Processor]
+        TrainPlan[Training Planner]
+        NotifSvc[Notification Service]
+        SchedSvc[Scheduler Service]
+        ExportSvc[Export Service]
+        AuthSvc[Auth Service]
+    end
+
+    %% ========================================
+    %% Repository Layer
+    %% ========================================
+    subgraph RepositoryLayer["Repository Layer - Data Access"]
+        UserRepo[(User Repository)]
+        HealthRepo[(Health Metrics Repository)]
+        ActivityRepo[(Activity Repository)]
+        RecoRepo[(Recommendation Repository)]
+        TrainingRepo[(Training Plan Repository)]
+        SyncRepo[(Sync History Repository)]
+        AnalysisRepo[(Analysis Repository)]
+    end
+
+    %% ========================================
+    %% External Services
+    %% ========================================
+    subgraph ExternalAPIs["External APIs"]
+        GarminAPI[Garmin Connect API]
+        ClaudeAPI[Claude AI API]
+        EmailAPI[Email Service]
+    end
+
+    %% ========================================
+    %% Cross-Cutting Concerns
+    %% ========================================
+    subgraph CrossCutting["Cross-Cutting Concerns"]
+        Logger[Structured Logging<br/>structlog]
+        Cache[Caching Layer<br/>Redis/functools]
+        ErrorHandler[Error Handler<br/>Retry & Circuit Breaker]
+        Validator[Data Validator<br/>Pydantic]
+    end
+
+    %% ========================================
+    %% Service Dependencies
+    %% ========================================
+
+    %% GarminService interactions
+    GarminSvc -->|fetch data| GarminAPI
+    GarminSvc -->|save metrics| HealthRepo
+    GarminSvc -->|save activities| ActivityRepo
+    GarminSvc -->|log sync| SyncRepo
+    GarminSvc -->|with retry| ErrorHandler
+    GarminSvc -->|cache data| Cache
+    GarminSvc -->|log events| Logger
+
+    %% AIAnalyzer interactions
+    AISvc -->|analyze data| ClaudeAPI
+    AISvc -->|read metrics| HealthRepo
+    AISvc -->|read activities| ActivityRepo
+    AISvc -->|save recommendations| RecoRepo
+    AISvc -->|save analysis| AnalysisRepo
+    AISvc -->|with circuit breaker| ErrorHandler
+    AISvc -->|log analysis| Logger
+    AISvc -->|validate response| Validator
+
+    %% DataProcessor interactions
+    DataProc -->|read health data| HealthRepo
+    DataProc -->|read activities| ActivityRepo
+    DataProc -->|cache aggregations| Cache
+    DataProc -->|log processing| Logger
+    DataProc -->|validate calculations| Validator
+
+    %% TrainingPlanner interactions
+    TrainPlan -->|uses AI| AISvc
+    TrainPlan -->|uses processor| DataProc
+    TrainPlan -->|save plan| TrainingRepo
+    TrainPlan -->|get user profile| UserRepo
+    TrainPlan -->|log plan creation| Logger
+    TrainPlan -->|validate plan| Validator
+
+    %% NotificationService interactions
+    NotifSvc -->|send email| EmailAPI
+    NotifSvc -->|read recommendations| RecoRepo
+    NotifSvc -->|read user prefs| UserRepo
+    NotifSvc -->|with retry| ErrorHandler
+    NotifSvc -->|log notifications| Logger
+
+    %% SchedulerService interactions
+    SchedSvc -->|triggers| GarminSvc
+    SchedSvc -->|triggers| AISvc
+    SchedSvc -->|triggers| NotifSvc
+    SchedSvc -->|log jobs| Logger
+
+    %% ExportService interactions
+    ExportSvc -->|read health data| HealthRepo
+    ExportSvc -->|read activities| ActivityRepo
+    ExportSvc -->|log exports| Logger
+    ExportSvc -->|validate request| Validator
+
+    %% AuthService interactions
+    AuthSvc -->|user CRUD| UserRepo
+    AuthSvc -->|log auth events| Logger
+    AuthSvc -->|validate credentials| Validator
+
+    %% ========================================
+    %% Styling
+    %% ========================================
+    classDef serviceClass fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px
+    classDef repoClass fill:#e3f2fd,stroke:#0d47a1,stroke-width:2px
+    classDef externalClass fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    classDef crossClass fill:#fce4ec,stroke:#880e4f,stroke-width:2px
+
+    class GarminSvc,AISvc,DataProc,TrainPlan,NotifSvc,SchedSvc,ExportSvc,AuthSvc serviceClass
+    class UserRepo,HealthRepo,ActivityRepo,RecoRepo,TrainingRepo,SyncRepo,AnalysisRepo repoClass
+    class GarminAPI,ClaudeAPI,EmailAPI externalClass
+    class Logger,Cache,ErrorHandler,Validator crossClass

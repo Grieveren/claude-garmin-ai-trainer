@@ -1,0 +1,183 @@
+%% Data Flow Diagram
+%% Shows how data flows through the system from Garmin to AI Analysis
+
+sequenceDiagram
+    participant User
+    participant Dashboard
+    participant API
+    participant GarminService
+    participant GarminAPI
+    participant Database
+    participant DataProcessor
+    participant AIAnalyzer
+    participant ClaudeAPI
+    participant Notifications
+
+    %% ========================================
+    %% Daily Automated Sync Flow
+    %% ========================================
+    Note over API,Database: Daily Automated Sync (Scheduled Job)
+
+    rect rgb(240, 248, 255)
+        Note right of API: 1. Data Ingestion
+        API->>GarminService: trigger_daily_sync(user_id)
+        GarminService->>GarminAPI: authenticate()
+        GarminAPI-->>GarminService: session_token
+
+        GarminService->>GarminAPI: get_health_metrics(date)
+        GarminAPI-->>GarminService: health_data (HR, HRV, sleep, stress)
+
+        GarminService->>GarminAPI: get_activities(date_range)
+        GarminAPI-->>GarminService: activities_data
+
+        GarminService->>Database: save_health_metrics()
+        GarminService->>Database: save_activities()
+        Database-->>GarminService: saved
+
+        GarminService-->>API: sync_complete
+    end
+
+    rect rgb(240, 255, 240)
+        Note right of API: 2. Data Processing
+        API->>DataProcessor: process_metrics(user_id, date_range)
+        DataProcessor->>Database: query_health_metrics(30_days)
+        Database-->>DataProcessor: raw_metrics
+        DataProcessor->>Database: query_activities(30_days)
+        Database-->>DataProcessor: raw_activities
+
+        DataProcessor->>DataProcessor: calculate_TSS()
+        DataProcessor->>DataProcessor: calculate_CTL/ATL/TSB()
+        DataProcessor->>DataProcessor: identify_trends()
+
+        DataProcessor->>Database: save_aggregated_metrics()
+        Database-->>DataProcessor: saved
+
+        DataProcessor-->>API: processing_complete
+    end
+
+    rect rgb(255, 250, 240)
+        Note right of API: 3. AI Analysis
+        API->>AIAnalyzer: generate_analysis(user_id)
+        AIAnalyzer->>Database: fetch_processed_data(7/30/90_days)
+        Database-->>AIAnalyzer: metrics + activities + trends
+
+        AIAnalyzer->>AIAnalyzer: build_analysis_prompt()
+        AIAnalyzer->>ClaudeAPI: analyze(prompt, context_data)
+        ClaudeAPI-->>AIAnalyzer: ai_response (insights + recommendations)
+
+        AIAnalyzer->>AIAnalyzer: parse_response()
+        AIAnalyzer->>AIAnalyzer: validate_recommendations()
+
+        AIAnalyzer->>Database: save_analysis()
+        AIAnalyzer->>Database: save_recommendations()
+        Database-->>AIAnalyzer: saved
+
+        AIAnalyzer-->>API: analysis_complete
+    end
+
+    rect rgb(255, 240, 245)
+        Note right of API: 4. User Notification
+        API->>Notifications: send_daily_summary(user_id)
+        Notifications->>Database: fetch_latest_recommendations()
+        Database-->>Notifications: recommendations
+
+        Notifications->>Notifications: format_email()
+        Notifications->>Notifications: send_email()
+
+        Notifications-->>API: notification_sent
+    end
+
+    %% ========================================
+    %% User Dashboard View Flow
+    %% ========================================
+    Note over User,Database: User Views Dashboard
+
+    rect rgb(245, 245, 255)
+        User->>Dashboard: open_dashboard()
+        Dashboard->>API: GET /api/v1/health/metrics (30 days)
+
+        API->>DataProcessor: get_cached_dashboard_data(user_id)
+        DataProcessor->>Database: query_health_metrics()
+        Database-->>DataProcessor: metrics
+        DataProcessor->>Database: query_activities()
+        Database-->>DataProcessor: activities
+
+        DataProcessor->>DataProcessor: aggregate_statistics()
+        DataProcessor-->>API: dashboard_data
+
+        API-->>Dashboard: JSON response
+        Dashboard->>Dashboard: render_charts()
+        Dashboard-->>User: display_dashboard
+    end
+
+    %% ========================================
+    %% User Requests AI Analysis Flow
+    %% ========================================
+    Note over User,ClaudeAPI: User Requests On-Demand Analysis
+
+    rect rgb(255, 245, 238)
+        User->>Dashboard: request_analysis(date_range)
+        Dashboard->>API: POST /api/v1/analysis/generate
+
+        API->>AIAnalyzer: generate_analysis(user_id, params)
+        AIAnalyzer->>Database: fetch_data(date_range)
+        Database-->>AIAnalyzer: data
+
+        AIAnalyzer->>ClaudeAPI: analyze(prompt)
+        ClaudeAPI-->>AIAnalyzer: analysis_result
+
+        AIAnalyzer->>Database: save_analysis()
+        Database-->>AIAnalyzer: analysis_id
+
+        AIAnalyzer-->>API: analysis_complete(analysis_id)
+        API-->>Dashboard: 202 Accepted (analysis_id)
+
+        Dashboard->>API: GET /api/v1/analysis/{analysis_id}
+        API->>Database: query_analysis(analysis_id)
+        Database-->>API: full_analysis
+        API-->>Dashboard: analysis_results
+        Dashboard-->>User: display_analysis
+    end
+
+    %% ========================================
+    %% Training Plan Generation Flow
+    %% ========================================
+    Note over User,ClaudeAPI: User Creates Training Plan
+
+    rect rgb(248, 255, 248)
+        User->>Dashboard: create_training_plan(goal, weeks)
+        Dashboard->>API: POST /api/v1/training/plans
+
+        API->>DataProcessor: get_current_fitness_level(user_id)
+        DataProcessor->>Database: query_recent_activities()
+        Database-->>DataProcessor: activities
+        DataProcessor-->>API: fitness_metrics
+
+        API->>AIAnalyzer: generate_training_plan(goal, fitness, weeks)
+        AIAnalyzer->>ClaudeAPI: create_plan(parameters)
+        ClaudeAPI-->>AIAnalyzer: structured_plan
+
+        AIAnalyzer->>Database: save_training_plan()
+        Database-->>AIAnalyzer: plan_id
+
+        AIAnalyzer-->>API: plan_created(plan_id)
+        API-->>Dashboard: 201 Created (plan)
+        Dashboard-->>User: display_plan
+    end
+
+    %% ========================================
+    %% Error Handling Flow
+    %% ========================================
+    Note over API,GarminAPI: Error Handling Example
+
+    rect rgb(255, 240, 240)
+        API->>GarminService: sync_data()
+        GarminService->>GarminAPI: get_data()
+        GarminAPI-->>GarminService: 429 Rate Limited
+
+        GarminService->>GarminService: exponential_backoff(retry=1)
+        GarminService->>GarminAPI: get_data() [retry]
+        GarminAPI-->>GarminService: 200 OK (data)
+
+        GarminService-->>API: success (with retry info)
+    end

@@ -1,0 +1,250 @@
+%% Authentication and Authorization Flow Diagram
+%% Shows JWT-based authentication flow
+
+sequenceDiagram
+    participant User
+    participant Dashboard
+    participant API
+    participant AuthService
+    participant Database
+    participant GarminService
+    participant GarminAPI
+
+    %% ========================================
+    %% User Registration Flow
+    %% ========================================
+    Note over User,Database: User Registration
+
+    rect rgb(240, 248, 255)
+        User->>Dashboard: fill_registration_form()
+        Note right of User: email, password,<br/>garmin_email, garmin_password
+
+        Dashboard->>API: POST /api/v1/auth/register
+        Note right of Dashboard: {email, password,<br/>garmin_credentials}
+
+        API->>AuthService: register_user(data)
+
+        AuthService->>AuthService: validate_email_format()
+        AuthService->>AuthService: validate_password_strength()
+
+        AuthService->>Database: check_email_exists()
+        Database-->>AuthService: email_available
+
+        AuthService->>AuthService: hash_password(bcrypt)
+        AuthService->>AuthService: encrypt_garmin_credentials(Fernet)
+
+        AuthService->>Database: create_user(hashed_data)
+        Database-->>AuthService: user_created (user_id)
+
+        AuthService-->>API: user_created
+        API-->>Dashboard: 201 Created {user_id, email}
+        Dashboard-->>User: registration_successful
+    end
+
+    %% ========================================
+    %% User Login Flow
+    %% ========================================
+    Note over User,Database: User Login (JWT Token Generation)
+
+    rect rgb(240, 255, 240)
+        User->>Dashboard: submit_login_form()
+        Note right of User: email, password
+
+        Dashboard->>API: POST /api/v1/auth/login
+        Note right of Dashboard: {email, password}
+
+        API->>AuthService: authenticate(email, password)
+
+        AuthService->>Database: get_user_by_email(email)
+        Database-->>AuthService: user_data (hashed_password)
+
+        AuthService->>AuthService: verify_password(bcrypt)
+
+        alt Password Valid
+            AuthService->>AuthService: generate_access_token(JWT, 15min)
+            AuthService->>AuthService: generate_refresh_token(JWT, 7days)
+
+            AuthService->>Database: save_refresh_token(user_id, token)
+            Database-->>AuthService: saved
+
+            AuthService-->>API: tokens(access_token, refresh_token)
+            API-->>Dashboard: 200 OK {access_token, refresh_token, expires_in}
+
+            Dashboard->>Dashboard: store_tokens_in_memory()
+            Dashboard-->>User: login_successful (redirect to dashboard)
+        else Password Invalid
+            AuthService-->>API: AuthenticationError
+            API-->>Dashboard: 401 Unauthorized
+            Dashboard-->>User: display_error("Invalid credentials")
+        end
+    end
+
+    %% ========================================
+    %% Authenticated API Request Flow
+    %% ========================================
+    Note over User,Database: Authenticated API Request
+
+    rect rgb(255, 250, 240)
+        User->>Dashboard: view_health_metrics()
+        Dashboard->>API: GET /api/v1/health/metrics
+        Note right of Dashboard: Authorization: Bearer {access_token}
+
+        API->>API: extract_token_from_header()
+        API->>AuthService: verify_token(access_token)
+
+        AuthService->>AuthService: decode_jwt(token)
+        AuthService->>AuthService: check_expiration()
+        AuthService->>AuthService: verify_signature()
+
+        alt Token Valid
+            AuthService-->>API: token_valid (user_id, claims)
+
+            API->>Database: get_health_metrics(user_id)
+            Database-->>API: metrics_data
+
+            API-->>Dashboard: 200 OK {data}
+            Dashboard-->>User: display_metrics()
+        else Token Expired
+            AuthService-->>API: TokenExpiredError
+            API-->>Dashboard: 401 Unauthorized {code: "TOKEN_EXPIRED"}
+            Dashboard->>Dashboard: trigger_token_refresh()
+        else Token Invalid
+            AuthService-->>API: InvalidTokenError
+            API-->>Dashboard: 401 Unauthorized {code: "INVALID_TOKEN"}
+            Dashboard->>Dashboard: redirect_to_login()
+        end
+    end
+
+    %% ========================================
+    %% Token Refresh Flow
+    %% ========================================
+    Note over User,Database: Token Refresh
+
+    rect rgb(255, 245, 238)
+        Dashboard->>API: POST /api/v1/auth/refresh
+        Note right of Dashboard: {refresh_token}
+
+        API->>AuthService: refresh_access_token(refresh_token)
+
+        AuthService->>Database: validate_refresh_token(refresh_token)
+        Database-->>AuthService: token_valid (user_id)
+
+        alt Refresh Token Valid
+            AuthService->>AuthService: generate_new_access_token(15min)
+
+            AuthService-->>API: new_access_token
+            API-->>Dashboard: 200 OK {access_token, expires_in}
+
+            Dashboard->>Dashboard: update_access_token()
+            Dashboard->>Dashboard: retry_original_request()
+        else Refresh Token Invalid/Expired
+            AuthService-->>API: InvalidTokenError
+            API-->>Dashboard: 401 Unauthorized
+            Dashboard->>Dashboard: clear_tokens()
+            Dashboard-->>User: redirect_to_login()
+        end
+    end
+
+    %% ========================================
+    %% User Logout Flow
+    %% ========================================
+    Note over User,Database: User Logout
+
+    rect rgb(255, 240, 245)
+        User->>Dashboard: click_logout()
+        Dashboard->>API: POST /api/v1/auth/logout
+        Note right of Dashboard: {refresh_token}
+
+        API->>AuthService: logout(refresh_token)
+
+        AuthService->>Database: delete_refresh_token(token)
+        Database-->>AuthService: deleted
+
+        AuthService-->>API: logout_successful
+        API-->>Dashboard: 204 No Content
+
+        Dashboard->>Dashboard: clear_tokens_from_memory()
+        Dashboard-->>User: redirect_to_login()
+    end
+
+    %% ========================================
+    %% Garmin Authentication Flow
+    %% ========================================
+    Note over API,GarminAPI: Garmin API Authentication (Background)
+
+    rect rgb(248, 255, 248)
+        API->>GarminService: sync_garmin_data(user_id)
+
+        GarminService->>Database: get_garmin_credentials(user_id)
+        Database-->>GarminService: encrypted_credentials
+
+        GarminService->>GarminService: decrypt_credentials(Fernet)
+
+        GarminService->>GarminAPI: login(garmin_email, garmin_password)
+
+        alt Garmin Login Successful
+            GarminAPI-->>GarminService: session_token
+
+            GarminService->>GarminAPI: get_user_summary()
+            GarminAPI-->>GarminService: user_data
+
+            GarminService-->>API: garmin_authenticated
+        else Garmin Login Failed
+            GarminAPI-->>GarminService: 401 Unauthorized
+
+            GarminService-->>API: GarminAuthenticationError
+            API->>Database: mark_garmin_disconnected(user_id)
+
+            API->>Dashboard: notify_user("Garmin credentials invalid")
+        end
+    end
+
+    %% ========================================
+    %% Authorization Check (Future: RBAC)
+    %% ========================================
+    Note over API,Database: Authorization Check (Role-Based Access Control)
+
+    rect rgb(245, 245, 255)
+        Dashboard->>API: DELETE /api/v1/activities/{activity_id}
+        Note right of Dashboard: Authorization: Bearer {token}
+
+        API->>AuthService: verify_token(token)
+        AuthService-->>API: token_valid (user_id)
+
+        API->>Database: get_activity(activity_id)
+        Database-->>API: activity (owner_user_id)
+
+        API->>API: check_ownership(user_id == owner_user_id)
+
+        alt User Owns Activity
+            API->>Database: delete_activity(activity_id)
+            Database-->>API: deleted
+            API-->>Dashboard: 204 No Content
+        else User Does Not Own Activity
+            API-->>Dashboard: 403 Forbidden {code: "AUTHORIZATION_FAILED"}
+        end
+    end
+
+    %% ========================================
+    %% Rate Limiting Flow
+    %% ========================================
+    Note over API,Dashboard: Rate Limiting
+
+    rect rgb(255, 240, 240)
+        Dashboard->>API: GET /api/v1/analysis/generate [Request 6]
+        Note right of Dashboard: Same user, within 1 hour
+
+        API->>API: check_rate_limit(user_id, endpoint)
+        Note right of API: Limit: 5 requests/hour
+
+        alt Rate Limit Not Exceeded
+            API->>API: increment_request_count()
+            API->>API: process_request()
+            Note right of API: X-RateLimit-Remaining: 4
+        else Rate Limit Exceeded
+            API-->>Dashboard: 429 Too Many Requests
+            Note right of API: X-RateLimit-Limit: 5<br/>X-RateLimit-Remaining: 0<br/>X-RateLimit-Reset: 1634567890<br/>Retry-After: 3600
+
+            Dashboard-->>User: display_rate_limit_message()
+        end
+    end

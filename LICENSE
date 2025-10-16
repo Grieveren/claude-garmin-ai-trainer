@@ -1,0 +1,55 @@
+MIT License
+
+Copyright (c) 2025 AI Training Optimizer Contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+ADDITIONAL DISCLAIMERS:
+
+1. UNOFFICIAL GARMIN API USAGE
+This software uses the unofficial 'garminconnect' Python library which
+reverse-engineers Garmin's web API. This may violate Garmin's Terms of Service.
+Use at your own risk. The authors are not responsible for any consequences of
+using unofficial APIs.
+
+2. NOT MEDICAL ADVICE
+This software provides training recommendations based on algorithms and AI
+analysis. It is NOT medical advice and should not be used as a substitute for
+professional medical consultation. Always consult healthcare professionals
+before starting any training program or if you have health concerns.
+
+3. AI ANALYSIS LIMITATIONS
+AI-generated recommendations are based on available data and algorithms.
+Individual responses to training vary. Users should use their own judgment
+and listen to their bodies. The authors are not responsible for injuries,
+overtraining, or other adverse outcomes.
+
+4. DATA PRIVACY
+Users are responsible for securing their own health data and API credentials.
+The software stores data locally, but users should take appropriate security
+measures including encryption and backups.
+
+5. COST DISCLAIMER
+This software requires paid API services (Claude AI) which incur costs.
+Users are responsible for all API costs incurred through usage.
+
+BY USING THIS SOFTWARE, YOU ACKNOWLEDGE THAT YOU HAVE READ THIS LICENSE
+AND DISCLAIMERS AND AGREE TO ALL TERMS.

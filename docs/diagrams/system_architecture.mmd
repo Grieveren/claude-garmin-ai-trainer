@@ -1,0 +1,244 @@
+%% System Architecture Diagram for Garmin AI Training Optimization System
+%% This diagram shows the complete system architecture with all layers and components
+
+graph TB
+    %% ========================================
+    %% User/Client Layer
+    %% ========================================
+    User[User/Athlete]
+
+    %% ========================================
+    %% Presentation Layer
+    %% ========================================
+    subgraph Presentation["Presentation Layer"]
+        Dashboard[Web Dashboard<br/>React/Vue.js]
+        MobileApp[Mobile App<br/>Future]
+    end
+
+    %% ========================================
+    %% API Gateway & Middleware Layer
+    %% ========================================
+    subgraph APILayer["API Gateway Layer"]
+        FastAPI[FastAPI Application<br/>OpenAPI/Swagger]
+        AuthMiddleware[Authentication<br/>JWT Middleware]
+        RateLimiter[Rate Limiting<br/>Middleware]
+        Logger[Request Logger<br/>Middleware]
+        CORS[CORS<br/>Middleware]
+    end
+
+    %% ========================================
+    %% API Routes Layer
+    %% ========================================
+    subgraph Routes["API Routes Layer"]
+        HealthRoutes[/api/v1/health/*]
+        ActivityRoutes[/api/v1/activities/*]
+        TrainingRoutes[/api/v1/training/*]
+        RecoRoutes[/api/v1/recommendations/*]
+        AnalysisRoutes[/api/v1/analysis/*]
+        SyncRoutes[/api/v1/sync/*]
+        ExportRoutes[/api/v1/export/*]
+        AuthRoutes[/api/v1/auth/*]
+    end
+
+    %% ========================================
+    %% Service Layer (Business Logic)
+    %% ========================================
+    subgraph Services["Service Layer"]
+        GarminService[Garmin Service<br/>- Authentication<br/>- Data Fetching<br/>- Rate Limiting<br/>- Error Handling]
+        AIAnalyzer[AI Analyzer<br/>- Claude API Integration<br/>- Prompt Engineering<br/>- Response Parsing<br/>- Recommendation Generation]
+        DataProcessor[Data Processor<br/>- Metrics Calculation<br/>- TSS/CTL/ATL/TSB<br/>- Trend Analysis<br/>- Aggregations]
+        TrainingPlanner[Training Planner<br/>- Plan Generation<br/>- Workout Scheduling<br/>- Plan Adaptation<br/>- Progress Tracking]
+        NotificationService[Notification Service<br/>- Email Notifications<br/>- SMS Alerts<br/>- In-App Messages<br/>- Delivery Tracking]
+        SchedulerService[Scheduler Service<br/>- Daily Sync Jobs<br/>- Analysis Jobs<br/>- Cleanup Jobs<br/>- Health Monitoring]
+        ExportService[Export Service<br/>- CSV Generation<br/>- JSON Export<br/>- File Management]
+        AuthService[Auth Service<br/>- User Registration<br/>- Login/Logout<br/>- Token Management<br/>- Password Hashing]
+    end
+
+    %% ========================================
+    %% Data Access Layer (Repository Pattern)
+    %% ========================================
+    subgraph DataAccess["Data Access Layer"]
+        UserRepo[User Repository]
+        HealthRepo[Health Metrics<br/>Repository]
+        ActivityRepo[Activity Repository]
+        RecoRepo[Recommendation<br/>Repository]
+        TrainingRepo[Training Plan<br/>Repository]
+        SyncRepo[Sync History<br/>Repository]
+        AnalysisRepo[Analysis Repository]
+    end
+
+    %% ========================================
+    %% Infrastructure Layer
+    %% ========================================
+    subgraph Infrastructure["Infrastructure Layer"]
+        Database[(SQLite/PostgreSQL<br/>Database)]
+        Cache[(Redis Cache<br/>Future)]
+        FileStorage[File Storage<br/>Export Files]
+    end
+
+    %% ========================================
+    %% External Services
+    %% ========================================
+    subgraph External["External Services"]
+        GarminAPI[Garmin Connect API<br/>garminconnect lib]
+        ClaudeAPI[Claude AI API<br/>Anthropic]
+        EmailService[Email Service<br/>SMTP/SendGrid]
+        SMSService[SMS Service<br/>Twilio/Optional]
+    end
+
+    %% ========================================
+    %% Background Jobs
+    %% ========================================
+    subgraph BackgroundJobs["Background Jobs"]
+        DailySync[Daily Garmin Sync<br/>Scheduled: 8:00 AM]
+        WeeklyAnalysis[Weekly AI Analysis<br/>Scheduled: Sunday]
+        DataCleanup[Data Cleanup<br/>Scheduled: Daily]
+        HealthCheck[Health Monitoring<br/>Scheduled: Hourly]
+    end
+
+    %% ========================================
+    %% Monitoring & Observability
+    %% ========================================
+    subgraph Monitoring["Monitoring & Observability"]
+        StructLog[Structured Logging<br/>structlog]
+        Metrics[Application Metrics<br/>Prometheus/Future]
+        Alerting[Alerting System<br/>Email/Slack]
+    end
+
+    %% ========================================
+    %% Connections: User to Presentation
+    %% ========================================
+    User --> Dashboard
+    User -.-> MobileApp
+
+    %% ========================================
+    %% Connections: Presentation to API
+    %% ========================================
+    Dashboard --> FastAPI
+    MobileApp -.-> FastAPI
+
+    %% ========================================
+    %% Connections: API Middleware Flow
+    %% ========================================
+    FastAPI --> Logger
+    Logger --> CORS
+    CORS --> AuthMiddleware
+    AuthMiddleware --> RateLimiter
+    RateLimiter --> Routes
+
+    %% ========================================
+    %% Connections: Routes to Services
+    %% ========================================
+    HealthRoutes --> GarminService
+    HealthRoutes --> DataProcessor
+
+    ActivityRoutes --> GarminService
+    ActivityRoutes --> DataProcessor
+
+    TrainingRoutes --> TrainingPlanner
+    TrainingRoutes --> DataProcessor
+
+    RecoRoutes --> AIAnalyzer
+
+    AnalysisRoutes --> AIAnalyzer
+    AnalysisRoutes --> DataProcessor
+
+    SyncRoutes --> GarminService
+    SyncRoutes --> SchedulerService
+
+    ExportRoutes --> ExportService
+
+    AuthRoutes --> AuthService
+
+    %% ========================================
+    %% Connections: Services to External APIs
+    %% ========================================
+    GarminService --> GarminAPI
+    AIAnalyzer --> ClaudeAPI
+    NotificationService --> EmailService
+    NotificationService -.-> SMSService
+
+    %% ========================================
+    %% Connections: Services to Repositories
+    %% ========================================
+    GarminService --> HealthRepo
+    GarminService --> ActivityRepo
+    GarminService --> SyncRepo
+
+    AIAnalyzer --> RecoRepo
+    AIAnalyzer --> AnalysisRepo
+
+    DataProcessor --> HealthRepo
+    DataProcessor --> ActivityRepo
+
+    TrainingPlanner --> TrainingRepo
+    TrainingPlanner --> UserRepo
+
+    AuthService --> UserRepo
+
+    ExportService --> HealthRepo
+    ExportService --> ActivityRepo
+
+    SchedulerService --> GarminService
+    SchedulerService --> AIAnalyzer
+
+    %% ========================================
+    %% Connections: Repositories to Database
+    %% ========================================
+    UserRepo --> Database
+    HealthRepo --> Database
+    ActivityRepo --> Database
+    RecoRepo --> Database
+    TrainingRepo --> Database
+    SyncRepo --> Database
+    AnalysisRepo --> Database
+
+    %% ========================================
+    %% Connections: Caching Layer
+    %% ========================================
+    DataProcessor -.-> Cache
+    GarminService -.-> Cache
+
+    %% ========================================
+    %% Connections: File Storage
+    %% ========================================
+    ExportService --> FileStorage
+
+    %% ========================================
+    %% Connections: Background Jobs
+    %% ========================================
+    DailySync --> SchedulerService
+    WeeklyAnalysis --> SchedulerService
+    DataCleanup --> SchedulerService
+    HealthCheck --> SchedulerService
+
+    %% ========================================
+    %% Connections: Monitoring
+    %% ========================================
+    FastAPI --> StructLog
+    Services --> StructLog
+    HealthCheck --> Metrics
+    Metrics --> Alerting
+
+    %% ========================================
+    %% Styling
+    %% ========================================
+    classDef userClass fill:#e1f5ff,stroke:#01579b,stroke-width:2px
+    classDef presentationClass fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+    classDef apiClass fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    classDef serviceClass fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px
+    classDef dataClass fill:#fce4ec,stroke:#880e4f,stroke-width:2px
+    classDef infraClass fill:#e0f2f1,stroke:#004d40,stroke-width:2px
+    classDef externalClass fill:#fff9c4,stroke:#f57f17,stroke-width:2px
+    classDef jobClass fill:#ede7f6,stroke:#311b92,stroke-width:2px
+    classDef monitorClass fill:#ffebee,stroke:#b71c1c,stroke-width:2px
+
+    class User userClass
+    class Dashboard,MobileApp presentationClass
+    class FastAPI,AuthMiddleware,RateLimiter,Logger,CORS,HealthRoutes,ActivityRoutes,TrainingRoutes,RecoRoutes,AnalysisRoutes,SyncRoutes,ExportRoutes,AuthRoutes apiClass
+    class GarminService,AIAnalyzer,DataProcessor,TrainingPlanner,NotificationService,SchedulerService,ExportService,AuthService serviceClass
+    class UserRepo,HealthRepo,ActivityRepo,RecoRepo,TrainingRepo,SyncRepo,AnalysisRepo dataClass
+    class Database,Cache,FileStorage infraClass
+    class GarminAPI,ClaudeAPI,EmailService,SMSService externalClass
+    class DailySync,WeeklyAnalysis,DataCleanup,HealthCheck jobClass
+    class StructLog,Metrics,Alerting monitorClass
