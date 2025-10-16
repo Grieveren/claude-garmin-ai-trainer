@@ -210,7 +210,7 @@ class CostTracker:
             cache_write_cost=costs['cache_write_cost'],
             cache_read_cost=costs['cache_read_cost'],
             total_cost=costs['total_cost'],
-            metadata=metadata or {}
+            call_metadata=metadata or {}
         )
 
         self.db.add(cost_record)

@@ -1134,8 +1134,8 @@ class CostTracking(Base):
         comment="Total cost for this API call ($)"
     )
 
-    # Metadata
-    metadata: Mapped[Optional[dict]] = mapped_column(
+    # Call metadata (renamed from 'metadata' to avoid SQLAlchemy reserved word)
+    call_metadata: Mapped[Optional[dict]] = mapped_column(
         JSON,
         comment="Additional metadata (operation type, etc.)"
     )
