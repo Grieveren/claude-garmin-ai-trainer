@@ -958,6 +958,195 @@ class AIAnalysisCache(Base):
         return f"<AIAnalysisCache(id={self.id}, type={self.analysis_type}, hits={self.hit_count})>"
 
 
+class AIResponseCache(Base):
+    """
+    Cache for structured AI responses (Phase 3).
+
+    Caches fully structured Pydantic responses (ReadinessAnalysis,
+    CompleteRecommendation) to reduce API costs and improve response times.
+
+    This is different from AIAnalysisCache which stores raw text responses.
+    """
+    __tablename__ = "ai_response_cache"
+    __table_args__ = (
+        Index("idx_response_cache_key", "cache_key"),
+        Index("idx_response_cache_user_date", "user_id", "cached_at"),
+        Index("idx_response_cache_type", "cache_type"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+
+    # Cache key (SHA256 hash of context)
+    cache_key: Mapped[str] = mapped_column(
+        String(64),
+        unique=True,
+        nullable=False,
+        index=True,
+        comment="SHA-256 hash of ReadinessContext + cache_type"
+    )
+
+    # User and metadata
+    user_id: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+        index=True,
+        comment="User who generated this cached response"
+    )
+
+    cache_type: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        index=True,
+        comment="readiness, training, recovery, complete"
+    )
+
+    # Cached response (fully structured Pydantic model as JSON)
+    response_data: Mapped[dict] = mapped_column(
+        JSON,
+        nullable=False,
+        comment="Complete Pydantic model serialized to JSON"
+    )
+
+    # Cache management
+    cached_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        nullable=False,
+        index=True,
+        comment="When this response was cached (for TTL)"
+    )
+
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        nullable=False
+    )
+
+    def __repr__(self) -> str:
+        return f"<AIResponseCache(user_id='{self.user_id}', type={self.cache_type}, cached_at={self.cached_at})>"
+
+
+class CostTracking(Base):
+    """
+    AI API cost tracking (Phase 3).
+
+    Tracks token usage and costs for AI API calls to monitor and optimize
+    spending. Essential for cost control and budget management.
+    """
+    __tablename__ = "cost_tracking"
+    __table_args__ = (
+        Index("idx_cost_user_date", "user_id", "call_date"),
+        Index("idx_cost_date", "call_date"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+
+    # Call identification
+    call_id: Mapped[str] = mapped_column(
+        String(100),
+        unique=True,
+        nullable=False,
+        index=True,
+        comment="Unique identifier for this API call"
+    )
+
+    user_id: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+        index=True,
+        comment="User who made the API call"
+    )
+
+    call_date: Mapped[date] = mapped_column(
+        Date,
+        nullable=False,
+        index=True,
+        comment="Date of the API call"
+    )
+
+    # Model information
+    model: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+        comment="AI model used (e.g., claude-3-5-sonnet-20241022)"
+    )
+
+    # Token usage
+    input_tokens: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        comment="Number of input tokens"
+    )
+
+    output_tokens: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        comment="Number of output tokens"
+    )
+
+    cache_write_tokens: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        nullable=False,
+        comment="Number of cache write tokens"
+    )
+
+    cache_read_tokens: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        nullable=False,
+        comment="Number of cache read tokens"
+    )
+
+    # Cost breakdown (in USD)
+    input_cost: Mapped[float] = mapped_column(
+        Float,
+        nullable=False,
+        comment="Cost of input tokens ($)"
+    )
+
+    output_cost: Mapped[float] = mapped_column(
+        Float,
+        nullable=False,
+        comment="Cost of output tokens ($)"
+    )
+
+    cache_write_cost: Mapped[float] = mapped_column(
+        Float,
+        default=0.0,
+        nullable=False,
+        comment="Cost of cache writes ($)"
+    )
+
+    cache_read_cost: Mapped[float] = mapped_column(
+        Float,
+        default=0.0,
+        nullable=False,
+        comment="Cost of cache reads ($)"
+    )
+
+    total_cost: Mapped[float] = mapped_column(
+        Float,
+        nullable=False,
+        comment="Total cost for this API call ($)"
+    )
+
+    # Metadata
+    metadata: Mapped[Optional[dict]] = mapped_column(
+        JSON,
+        comment="Additional metadata (operation type, etc.)"
+    )
+
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    def __repr__(self) -> str:
+        return f"<CostTracking(user_id='{self.user_id}', date={self.call_date}, cost=${self.total_cost:.4f})>"
+
+
 class TrainingLoadTracking(Base):
     """
     Training load monitoring with ACWR, fitness, and fatigue tracking.
