@@ -67,20 +67,20 @@ class HeartRateZones(BaseModel):
         max_hr = self.max_heart_rate
 
         # Zone 1: 50-60% (Recovery)
-        self.zone1_min = int(max_hr * 0.50)
-        self.zone1_max = int(max_hr * 0.60)
+        self.zone1_min = round(max_hr * 0.50)
+        self.zone1_max = round(max_hr * 0.60)
 
         # Zone 2: 60-70% (Easy aerobic)
         self.zone2_min = self.zone1_max + 1
-        self.zone2_max = int(max_hr * 0.70)
+        self.zone2_max = round(max_hr * 0.70)
 
         # Zone 3: 70-80% (Moderate aerobic)
         self.zone3_min = self.zone2_max + 1
-        self.zone3_max = int(max_hr * 0.80)
+        self.zone3_max = round(max_hr * 0.80)
 
         # Zone 4: 80-90% (Threshold)
         self.zone4_min = self.zone3_max + 1
-        self.zone4_max = int(max_hr * 0.90)
+        self.zone4_max = round(max_hr * 0.90)
 
         # Zone 5: 90-100% (VO2 max)
         self.zone5_min = self.zone4_max + 1

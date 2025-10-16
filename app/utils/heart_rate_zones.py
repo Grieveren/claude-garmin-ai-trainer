@@ -74,8 +74,8 @@ class HeartRateZoneCalculator:
         zones = {}
 
         for zone, (min_pct, max_pct) in HeartRateZoneCalculator.ZONE_PERCENTAGES.items():
-            min_hr = int(max_heart_rate * min_pct)
-            max_hr = int(max_heart_rate * max_pct)
+            min_hr = round(max_heart_rate * min_pct)
+            max_hr = round(max_heart_rate * max_pct)
             zones[zone] = (min_hr, max_hr)
 
         return zones
@@ -109,8 +109,8 @@ class HeartRateZoneCalculator:
         zones = {}
 
         for zone, (min_pct, max_pct) in HeartRateZoneCalculator.ZONE_PERCENTAGES.items():
-            min_hr = int((hr_reserve * min_pct) + resting_heart_rate)
-            max_hr = int((hr_reserve * max_pct) + resting_heart_rate)
+            min_hr = round((hr_reserve * min_pct) + resting_heart_rate)
+            max_hr = round((hr_reserve * max_pct) + resting_heart_rate)
             zones[zone] = (min_hr, max_hr)
 
         return zones

@@ -344,7 +344,10 @@ class ReadinessAnalyzer:
                 user_id=user_id,
                 days=7
             )
-            return result if result else None
+            # Extract acute_load (7-day load) from the dict
+            if result and isinstance(result, dict):
+                return result.get('acute_load')
+            return None
         except Exception as e:
             logger.debug(f"Could not calculate 7-day training load: {e}")
             return None
@@ -356,7 +359,10 @@ class ReadinessAnalyzer:
                 user_id=user_id,
                 days=28
             )
-            return result if result else None
+            # Extract chronic_load (28-day load) from the dict
+            if result and isinstance(result, dict):
+                return result.get('chronic_load')
+            return None
         except Exception as e:
             logger.debug(f"Could not calculate 28-day training load: {e}")
             return None

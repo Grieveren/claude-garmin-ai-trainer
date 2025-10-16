@@ -23,13 +23,21 @@ import random
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from app.database import init_db, reset_db, get_db_context
-from app.models import (
+from app.database import init_db, reset_db, get_db_context, engine
+from app.models.database_models import (
     UserProfile, DailyMetrics, SleepSession, Activity,
     HeartRateSample, HRVReading, TrainingPlan, PlannedWorkout,
     DailyReadiness, TrainingLoadTracking, SyncHistory,
     ActivityType, WorkoutIntensity, ReadinessRecommendation
 )
+from app.services.data_access import (
+    bulk_insert_daily_metrics, bulk_insert_activities,
+    get_dashboard_summary
+)
+from app.utils.database_utils import (
+    ensure_user_exists, get_or_create
+)
+from sqlalchemy import inspect
 
 
 def create_sample_user(db):
@@ -374,11 +382,121 @@ def create_sample_data(db):
     print(f"  Planned workouts: {len(workouts)}")
 
 
+def verify_database_schema(db):
+    """Verify database schema and indexes."""
+    print("\nVerifying database schema...")
+
+    inspector = inspect(engine)
+    tables = inspector.get_table_names()
+
+    expected_tables = [
+        'user_profile', 'daily_metrics', 'sleep_sessions', 'activities',
+        'heart_rate_samples', 'hrv_readings', 'training_plans',
+        'planned_workouts', 'daily_readiness', 'ai_analysis_cache',
+        'training_load_tracking', 'sync_history'
+    ]
+
+    print(f"\n📊 Database Schema Verification:")
+    print(f"  Expected tables: {len(expected_tables)}")
+    print(f"  Found tables: {len(tables)}")
+
+    missing_tables = set(expected_tables) - set(tables)
+    if missing_tables:
+        print(f"  ⚠️  Missing tables: {missing_tables}")
+    else:
+        print(f"  ✅ All tables present")
+
+    # Verify indexes for performance
+    print(f"\n📈 Index Verification:")
+    total_indexes = 0
+    for table in expected_tables:
+        if table in tables:
+            indexes = inspector.get_indexes(table)
+            total_indexes += len(indexes)
+            print(f"  {table}: {len(indexes)} indexes")
+
+    print(f"\n  Total indexes: {total_indexes}")
+
+    return len(missing_tables) == 0
+
+
+def test_data_access_queries(db, user_id: str):
+    """Test data access layer with sample queries."""
+    print("\n🧪 Testing Data Access Layer...")
+
+    # Test daily metrics query
+    today = date.today()
+    metrics = db.query(DailyMetrics).filter(
+        DailyMetrics.user_id == user_id,
+        DailyMetrics.date == today
+    ).first()
+
+    if metrics:
+        print(f"  ✅ Daily metrics query: Found metrics for {today}")
+    else:
+        print(f"  ⚠️  Daily metrics query: No metrics for {today}")
+
+    # Test activity query
+    activities = db.query(Activity).filter(
+        Activity.user_id == user_id
+    ).order_by(Activity.activity_date.desc()).limit(5).all()
+
+    print(f"  ✅ Activity query: Found {len(activities)} activities")
+
+    # Test dashboard summary (comprehensive query)
+    try:
+        import time
+        start_time = time.time()
+        summary = get_dashboard_summary(db, user_id)
+        elapsed = (time.time() - start_time) * 1000  # Convert to ms
+
+        print(f"  ✅ Dashboard summary: Retrieved in {elapsed:.1f}ms")
+
+        if summary.get('latest_metrics'):
+            print(f"     - Latest metrics: {summary['latest_metrics'].date}")
+        if summary.get('training_load'):
+            print(f"     - ACWR: {summary['training_load'].get('acwr')}")
+        if summary.get('upcoming_workouts'):
+            print(f"     - Upcoming workouts: {len(summary['upcoming_workouts'])}")
+
+    except Exception as e:
+        print(f"  ⚠️  Dashboard summary failed: {e}")
+
+
+def show_database_stats(db):
+    """Show database statistics."""
+    print("\n📊 Database Statistics:")
+
+    stats = {}
+    tables = [
+        ('Users', UserProfile),
+        ('Daily Metrics', DailyMetrics),
+        ('Sleep Sessions', SleepSession),
+        ('Activities', Activity),
+        ('HRV Readings', HRVReading),
+        ('Training Plans', TrainingPlan),
+        ('Planned Workouts', PlannedWorkout),
+        ('Daily Readiness', DailyReadiness),
+        ('Training Load', TrainingLoadTracking),
+        ('Sync History', SyncHistory),
+    ]
+
+    for name, model in tables:
+        count = db.query(model).count()
+        stats[name] = count
+        print(f"  {name}: {count:,} records")
+
+    return stats
+
+
 def main():
     """Main function to initialize database."""
     parser = argparse.ArgumentParser(description="Initialize Garmin AI Training System database")
     parser.add_argument("--sample", action="store_true", help="Create sample data for testing")
     parser.add_argument("--reset", action="store_true", help="Reset database (WARNING: deletes all data)")
+    parser.add_argument("--verify", action="store_true", help="Verify database schema and indexes")
+    parser.add_argument("--stats", action="store_true", help="Show database statistics")
+    parser.add_argument("--test", action="store_true", help="Test data access layer queries")
     args = parser.parse_args()
 
     if args.reset:
@@ -395,17 +513,36 @@ def main():
         init_db()
         print("✅ Database tables created successfully.")
 
+    # Verify schema if requested
+    with get_db_context() as db:
+        if args.verify or args.sample:
+            verify_database_schema(db)
+
     if args.sample:
         print("\nCreating sample data...")
         with get_db_context() as db:
             create_sample_data(db)
         print("✅ Sample data created successfully.")
 
+    # Show stats if requested
+    if args.stats or args.sample:
+        with get_db_context() as db:
+            show_database_stats(db)
+
+    # Test queries if requested
+    if args.test and args.sample:
+        with get_db_context() as db:
+            test_data_access_queries(db, "test_user_001")
+
     print("\n🎉 Database initialization complete!")
     print("\nYou can now:")
     print("  - Start the API server")
     print("  - Run sync operations to fetch Garmin data")
     print("  - Generate AI training recommendations")
+    print("\nUseful commands:")
+    print("  python scripts/init_database.py --verify     # Verify schema")
+    print("  python scripts/init_database.py --stats      # Show statistics")
+    print("  python scripts/init_database.py --test       # Test queries")
 
 
 if __name__ == "__main__":

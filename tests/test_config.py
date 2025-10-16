@@ -33,11 +33,36 @@ class TestConfigValidation:
         assert settings.athlete_age == 35
         assert settings.max_heart_rate == 185
 
-    def test_missing_required_field(self, monkeypatch):
+    def test_missing_required_field(self, monkeypatch, tmp_path):
         """Test that missing required fields raise ValidationError"""
-        # Don't set required fields
-        with pytest.raises(ValidationError):
-            Settings()
+        # Clear all required environment variables
+        required_vars = [
+            "GARMIN_EMAIL",
+            "GARMIN_PASSWORD",
+            "ANTHROPIC_API_KEY",
+            "SECRET_KEY",
+            "ATHLETE_NAME",
+            "ATHLETE_AGE",
+            "ATHLETE_GENDER",
+            "MAX_HEART_RATE",
+            "RESTING_HEART_RATE",
+            "TRAINING_GOAL",
+        ]
+
+        for var in required_vars:
+            monkeypatch.delenv(var, raising=False)
+
+        # Change to a temporary directory without .env file
+        import os
+        original_dir = os.getcwd()
+        os.chdir(tmp_path)
+
+        try:
+            with pytest.raises(ValidationError):
+                Settings()
+        finally:
+            # Restore original directory
+            os.chdir(original_dir)
 
     def test_invalid_email(self, monkeypatch):
         """Test invalid email format"""
