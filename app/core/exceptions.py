@@ -9,10 +9,10 @@ from typing import Any, Optional
 from fastapi import HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
-import structlog
+import logging
 from datetime import datetime
 
-logger = structlog.get_logger()
+logger = logging.getLogger(__name__)
 
 
 # ============================================================================
@@ -762,14 +762,9 @@ async def app_exception_handler(request: Request, exc: AppException) -> JSONResp
 
     # Log the exception
     logger.error(
-        "application_error",
-        error_code=exc.code,
-        error_message=exc.message,
-        status_code=exc.status_code,
-        request_id=request_id,
-        path=request.url.path,
-        method=request.method,
-        **exc.extra_data
+        f"Application error: {exc.code} - {exc.message} "
+        f"(status={exc.status_code}, request_id={request_id}, "
+        f"path={request.url.path}, method={request.method})"
     )
 
     # Return JSON response
@@ -788,12 +783,9 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
     request_id = getattr(request.state, "request_id", None)
 
     logger.warning(
-        "http_exception",
-        status_code=exc.status_code,
-        detail=exc.detail,
-        request_id=request_id,
-        path=request.url.path,
-        method=request.method,
+        f"HTTP exception: {exc.detail} "
+        f"(status={exc.status_code}, request_id={request_id}, "
+        f"path={request.url.path}, method={request.method})"
     )
 
     return JSONResponse(
@@ -830,11 +822,8 @@ async def validation_exception_handler(
         })
 
     logger.warning(
-        "validation_error",
-        errors=errors,
-        request_id=request_id,
-        path=request.url.path,
-        method=request.method,
+        f"Validation error: {len(errors)} validation errors "
+        f"(request_id={request_id}, path={request.url.path}, method={request.method})"
     )
 
     return JSONResponse(
@@ -862,13 +851,9 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
     request_id = getattr(request.state, "request_id", None)
 
     logger.error(
-        "unhandled_exception",
-        exception_type=type(exc).__name__,
-        exception_message=str(exc),
-        request_id=request_id,
-        path=request.url.path,
-        method=request.method,
-        exc_info=True,
+        f"Unhandled exception: {type(exc).__name__} - {str(exc)} "
+        f"(request_id={request_id}, path={request.url.path}, method={request.method})",
+        exc_info=True
     )
 
     return JSONResponse(
@@ -910,4 +895,4 @@ def register_exception_handlers(app):
     app.add_exception_handler(RequestValidationError, validation_exception_handler)
     app.add_exception_handler(Exception, unhandled_exception_handler)
 
-    logger.info("exception_handlers_registered")
+    logger.info("Exception handlers registered successfully")
