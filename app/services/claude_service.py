@@ -407,12 +407,42 @@ class ClaudeService:
         context: ReadinessContext,
         training_rec: TrainingRecommendation
     ) -> WorkoutRecommendation:
-        """Generate specific workout recommendation."""
-        # Use mock implementation for now
-        # TODO: Implement AI-powered workout generation
-        from tests.mocks.mock_claude_service import MockClaudeService
-        mock = MockClaudeService()
-        return mock.recommend_workout(context, training_rec)
+        """
+        Generate specific workout recommendation.
+
+        Args:
+            context: Readiness context
+            training_rec: Training recommendation
+
+        Returns:
+            WorkoutRecommendation with detailed workout plan
+
+        Raises:
+            ClaudeServiceError: On service errors
+        """
+        logger.info(f"Generating workout for {context.user_id}")
+
+        system_prompt = self._build_workout_system_prompt()
+        user_message = self._build_workout_user_message(context, training_rec)
+
+        try:
+            response = self._make_api_call(
+                system=system_prompt,
+                messages=[{"role": "user", "content": user_message}]
+            )
+
+            workout = self._parse_workout_response(response["content"], context, training_rec)
+
+            logger.info(
+                f"Workout generated: {workout.workout_type.value} "
+                f"for {workout.total_duration_minutes}min"
+            )
+
+            return workout
+
+        except Exception as e:
+            logger.error(f"Failed to generate workout: {e}")
+            raise
 
     # ========================================================================
     # PROMPT BUILDERS
@@ -583,6 +613,70 @@ Provide recovery recommendation in JSON format:
 
         return message
 
+    def _build_workout_system_prompt(self) -> str:
+        """Build system prompt for workout generation."""
+        return """You are an expert endurance coach specializing in workout design and periodization.
+
+Your role is to create specific, detailed workout plans based on readiness and training goals.
+
+Key principles:
+- Workouts should be tailored to current readiness level
+- All workouts include proper warmup and cooldown
+- Intensity zones are clearly defined
+- Workouts are specific, measurable, and achievable
+- Safety and injury prevention are paramount
+
+Provide workouts that are:
+- Specific and detailed
+- Appropriate for current readiness
+- Progressive and purposeful
+- Safe and sustainable
+- Focused on quality execution"""
+
+    def _build_workout_user_message(
+        self,
+        context: ReadinessContext,
+        training_rec: TrainingRecommendation
+    ) -> str:
+        """Build user message for workout generation."""
+        message = f"""Design a specific workout for {context.analysis_date}:
+
+Training Recommendation:
+- Intensity: {training_rec.recommended_intensity.value}
+- Duration: {training_rec.recommended_duration_minutes} minutes
+- Focus: {training_rec.training_focus}
+- Workout Types: {', '.join([wt.value for wt in training_rec.workout_types])}
+"""
+
+        if training_rec.key_considerations:
+            message += f"\nKey Considerations:\n"
+            for consideration in training_rec.key_considerations:
+                message += f"- {consideration}\n"
+
+        if training_rec.avoid_list:
+            message += f"\nAvoid:\n"
+            for avoid in training_rec.avoid_list:
+                message += f"- {avoid}\n"
+
+        message += """
+Provide detailed workout in JSON format:
+{
+    "workout_type": "<endurance|tempo|interval|recovery|rest|strength>",
+    "total_duration_minutes": <integer>,
+    "warmup_duration": <integer or null>,
+    "main_duration": <integer or null>,
+    "cooldown_duration": <integer or null>,
+    "target_heart_rate_zone": "zone description",
+    "target_pace": "pace description",
+    "perceived_effort": "effort description (1-10 scale)",
+    "workout_description": "detailed workout plan",
+    "key_points": ["point1", "point2", ...],
+    "success_metrics": ["metric1", "metric2", ...],
+    "confidence": <0.0-1.0>
+}"""
+
+        return message
+
     # ========================================================================
     # RESPONSE PARSERS
     # ========================================================================
@@ -714,6 +808,52 @@ Provide recovery recommendation in JSON format:
 
         except (json.JSONDecodeError, KeyError, ValueError) as e:
             logger.error(f"Failed to parse recovery response: {e}")
+            raise ClaudeValidationError(f"Invalid response format: {e}")
+
+    def _parse_workout_response(
+        self,
+        response: str,
+        context: ReadinessContext,
+        training_rec: TrainingRecommendation
+    ) -> WorkoutRecommendation:
+        """Parse workout recommendation response."""
+        import json
+
+        try:
+            if "```json" in response:
+                json_start = response.find("```json") + 7
+                json_end = response.find("```", json_start)
+                json_str = response[json_start:json_end].strip()
+            elif "```" in response:
+                json_start = response.find("```") + 3
+                json_end = response.find("```", json_start)
+                json_str = response[json_start:json_end].strip()
+            else:
+                json_str = response.strip()
+
+            data = json.loads(json_str)
+
+            return WorkoutRecommendation(
+                user_id=context.user_id,
+                workout_date=context.analysis_date,
+                workout_type=WorkoutType(data["workout_type"]),
+                total_duration_minutes=int(data["total_duration_minutes"]),
+                warmup_duration=data.get("warmup_duration"),
+                main_duration=data.get("main_duration"),
+                cooldown_duration=data.get("cooldown_duration"),
+                target_heart_rate_zone=data.get("target_heart_rate_zone"),
+                target_pace=data.get("target_pace"),
+                perceived_effort=data.get("perceived_effort"),
+                workout_description=data["workout_description"],
+                key_points=data.get("key_points", []),
+                success_metrics=data.get("success_metrics", []),
+                confidence=float(data.get("confidence", 0.8)),
+                model_version=self.model,
+                timestamp=datetime.now()
+            )
+
+        except (json.JSONDecodeError, KeyError, ValueError) as e:
+            logger.error(f"Failed to parse workout response: {e}")
             raise ClaudeValidationError(f"Invalid response format: {e}")
 
     # ========================================================================
